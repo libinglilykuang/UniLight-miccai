@@ -192,12 +192,12 @@ def main():
         train_full_paths = [os.path.join(actual_root, f) for f in train_cases]
         val_full_paths = [os.path.join(actual_root, f) for f in val_cases]
 
-        train_ds = BraTS2023Dataset(train_full_paths, SDF_DIR, ROI_SIZE, augment=True)
-        val_ds = BraTS2023Dataset(val_full_paths, SDF_DIR, ROI_SIZE, augment=False)
+        train_ds = BraTS2023Dataset(train_full_paths, SDF_DIR, ROI_SIZE, augment=True,return_case_name=True)
+        val_ds = BraTS2023Dataset(val_full_paths, SDF_DIR, ROI_SIZE, augment=False,return_case_name=True)
     else:
         # MSD Dataset 内部会自动拼接，但我们需要传入正确的 actual_root
-        train_ds = MSDBTSDataset(actual_root, train_cases, SDF_DIR, ROI_SIZE, augment=True)
-        val_ds = MSDBTSDataset(actual_root, val_cases, SDF_DIR, ROI_SIZE, augment=False)
+        train_ds = MSDBTSDataset(actual_root, train_cases, SDF_DIR, ROI_SIZE, augment=True,return_case_name=True)
+        val_ds = MSDBTSDataset(actual_root, val_cases, SDF_DIR, ROI_SIZE, augment=False,return_case_name=True)
 
     train_loader = torch.utils.data.DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=2)
     val_loader = torch.utils.data.DataLoader(val_ds, batch_size=1, shuffle=False)
