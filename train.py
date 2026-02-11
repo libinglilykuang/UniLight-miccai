@@ -46,7 +46,7 @@ os.makedirs(SDF_DIR, exist_ok=True)
 BEST_PATH = os.path.join(SAVE_DIR, "best_student.pt")
 LAST_PATH = os.path.join(SAVE_DIR, "last_student.pth")
 
-TOTAL_EPOCHS = 100
+TOTAL_EPOCHS = 1
 BATCH_SIZE = 2
 LR = 1e-4
 ROI_SIZE = (128, 128, 128)

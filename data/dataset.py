@@ -6,6 +6,10 @@ from torch.utils.data import Dataset
 from sklearn.model_selection import KFold
 from tqdm import tqdm
 
+from train import DATA_DIR
+from utils.loss_metrics import BoundaryLoss
+
+
 # ==========================================
 # 1. Global Helper Functions for File Search
 # ==========================================
@@ -59,25 +63,18 @@ def find_nii_adaptive(case_dir, mode):
     return candidates[0]
 
 
-def precompute_sdfs_for_dataset(data_dir, case_list, out_dir, roi_size=(128, 128, 128)):
-    """
-    Precompute Signed Distance Function (SDF) maps for the dataset.
-    Saves results as .npz files to save space and speed up training.
-    """
+def precompute_sdfs_for_dataset(case_list, out_dir, roi_size=(128, 128, 128)):
     os.makedirs(out_dir, exist_ok=True)
-    print(f"Precomputing SDFs to {out_dir}...")
+    print(f"正在为 MSD 数据集预计算 SDFs 到 {out_dir}...")
 
     td, th, tw = roi_size
 
-    # Import locally to avoid circular dependency if needed
-    from utils.loss_metrics import BoundaryLoss
-
     for name in tqdm(case_list, desc="SDF Precomputing"):
-        # Handle filename (MSD format)
+        # 1. 文件名处理：MSD 是文件名列表，不再是 BraTS 的文件夹路径
         base_name = name.replace('.nii.gz', '').replace('.nii', '')
         out_path = os.path.join(out_dir, base_name + '.npz')
 
-        # Check if exists and is valid
+        # 检查是否存在且完整
         if os.path.exists(out_path):
             try:
                 with np.load(out_path) as data:
@@ -86,43 +83,53 @@ def precompute_sdfs_for_dataset(data_dir, case_list, out_dir, roi_size=(128, 128
             except:
                 os.remove(out_path)
 
-        # Path for MSD labels
-        seg_path = os.path.join(data_dir, "labelsTr", name)
+        # 2. 修改点：MSD 标签存储在固定的 labelsTr 目录下
+        seg_path = os.path.join(DATA_DIR, "labelsTr", name)
         if not os.path.exists(seg_path):
             continue
 
-        seg = nib.load(seg_path).get_fdata().astype(np.int16)
+        seg_obj = nib.load(seg_path)
+        seg = seg_obj.get_fdata().astype(np.int16)  # MSD 原始维度通常是 (H, W, D)
 
-        # Label Mapping (MSD: 1:ED, 2:NCR, 3:ET) -> (WT, TC, ET)
+        # 3. 修改点：MSD 标签映射 (1:ED, 2:NCR, 3:ET)
+        # 目标：WT=1+2+3, TC=2+3, ET=3
         wt = ((seg == 1) | (seg == 2) | (seg == 3)).astype(np.uint8)
         tc = ((seg == 2) | (seg == 3)).astype(np.uint8)
         et = (seg == 3).astype(np.uint8)
 
-        # Transpose to (C, D, H, W) to match training pipeline
-        seg_3ch = np.transpose(np.stack([wt, tc, et], axis=0), (0, 3, 1, 2))
+        seg_3ch = np.stack([wt, tc, et], axis=0)  # (3, H, W, D)
 
-        # Padding protection
+        # 4. 修改点：转置为 (C, D, H, W) 以符合 2023 框架逻辑
+        seg_3ch = np.transpose(seg_3ch, (0, 3, 1, 2))
+
+        # 5. 修改点：加入 Padding 保护，防止原始尺寸小于 128 导致裁剪失败
         c, d, h, w = seg_3ch.shape
         pd, ph, pw = max(0, td - d), max(0, th - h), max(0, tw - w)
         if pd or ph or pw:
             seg_3ch = np.pad(seg_3ch, (
-                (0, 0), (pd // 2, pd - pd // 2), (ph // 2, ph - ph // 2), (pw // 2, pw - pw // 2)
+                (0, 0),
+                (pd // 2, pd - pd // 2),
+                (ph // 2, ph - ph // 2),
+                (pw // 2, pw - pw // 2)
             ), mode='constant')
 
-        # Center Crop to ROI_SIZE
+        # 中心裁剪到 ROI_SIZE (完全复刻 2023 逻辑)
         _, curr_d, curr_h, curr_w = seg_3ch.shape
-        sd, sh, sw = (curr_d - td) // 2, (curr_h - th) // 2, (curr_w - tw) // 2
+        sd = (curr_d - td) // 2
+        sh = (curr_h - th) // 2
+        sw = (curr_w - tw) // 2
         seg_roi = seg_3ch[:, sd:sd + td, sh:sh + th, sw:sw + tw]
 
-        # Compute SDF per channel (stored in float16 to save Kaggle disk space)
+        # 6. 修改点：使用 float16 存储，解决 Kaggle 磁盘空间不足问题
         sdfs = np.zeros_like(seg_roi, dtype=np.float16)
         for ci in range(3):
+            # 依然调用你原代码中的 BoundaryLoss.compute_sdf_np
             sdf_val = BoundaryLoss.compute_sdf_np(seg_roi[ci])
             sdfs[ci] = sdf_val.astype(np.float16)
 
         np.savez_compressed(out_path, sdfs=sdfs)
 
-    print("SDF Precomputation Complete.")
+    print("MSD SDF 预计算/检查完成。")
 
 
 def get_5fold_split(data_dir, fold_idx, dataset_type="brats2023", seed=42):
