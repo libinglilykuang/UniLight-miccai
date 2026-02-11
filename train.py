@@ -23,7 +23,7 @@ from utils.loss_metrics import (
 # ============================================================
 # 1. 核心配置
 # ============================================================
-DATASET_TYPE = "brats2023"  # 👈 切换 "brats2023" 或 "msd"
+DATASET_TYPE = "msd"  # 👈 切换 "brats2023" 或 "msd"
 CURRENT_FOLD = 4
 NUM_FOLDS = 5
 SEED = 42
@@ -47,7 +47,7 @@ os.makedirs(SDF_DIR, exist_ok=True)
 BEST_PATH = os.path.join(SAVE_DIR, "best_student.pt")
 LAST_PATH = os.path.join(SAVE_DIR, "last_student.pth")
 
-TOTAL_EPOCHS = 100  # 建议设回 100，之前测试用的 1 太短
+TOTAL_EPOCHS = 1
 BATCH_SIZE = 2
 LR = 1e-4
 ROI_SIZE = (128, 128, 128)
