@@ -1,3 +1,4 @@
+import glob
 import os
 import torch
 import numpy as np
@@ -132,19 +133,50 @@ def precompute_sdfs_for_dataset(case_list, out_dir, roi_size=(128, 128, 128)):
     print("MSD SDF 预计算/检查完成。")
 
 
-def get_5fold_split(data_dir, fold_idx, dataset_type="brats2023", seed=42):
-    """Standardized 5-fold split to ensure consistency between Lily and Deni."""
-    if dataset_type == "brats2023":
-        all_cases = sorted([os.path.join(data_dir, d) for d in os.listdir(data_dir)
-                            if os.path.isdir(os.path.join(data_dir, d))])
-    else:
-        img_dir = os.path.join(data_dir, "imagesTr")
-        all_cases = sorted([f for f in os.listdir(img_dir) if f.endswith(".nii.gz")])
+def get_5fold_split(data_dir, fold_idx, num_folds=5, seed=42):
+    """
+    自适应搜索路径并进行五折划分
+    """
+    # 1. 递归搜索 imagesTr 文件夹 (你的 glob 逻辑)
+    search_path = os.path.join(data_dir, "**/imagesTr")
+    found_dirs = glob.glob(search_path, recursive=True)
 
-    kf = KFold(n_splits=5, shuffle=True, random_state=seed)
-    folds = list(kf.split(all_cases))
+    if not found_dirs:
+        # 保底方案
+        images_dir = os.path.join(data_dir, "imagesTr")
+    else:
+        # 使用搜索到的第一个 imagesTr
+        images_dir = found_dirs[0]
+
+    # 获取数据集的真实根目录 (imagesTr 的父目录)
+    # 这样可以确保 labelsTr 也能在这个目录下找到
+    actual_root = os.path.dirname(images_dir)
+
+    if not os.path.exists(images_dir):
+        raise FileNotFoundError(f"无法在 {data_dir} 下找到 imagesTr 文件夹。")
+
+    # 2. 读取文件名并过滤隐藏文件 (你的过滤逻辑)
+    all_files = sorted([
+        f for f in os.listdir(images_dir)
+        if (f.endswith('.nii.gz') or f.endswith('.nii')) and not f.startswith('.')
+    ])
+
+    if len(all_files) == 0:
+        raise ValueError(f"在 {images_dir} 中没有找到有效的 .nii.gz 文件。")
+
+    # 3. KFold 划分
+    kf = KFold(n_splits=num_folds, shuffle=True, random_state=seed)
+    folds = list(kf.split(all_files))
     train_idx, val_idx = folds[fold_idx]
-    return [all_cases[i] for i in train_idx], [all_cases[i] for i in val_idx]
+
+    train_cases = [all_files[i] for i in train_idx]
+    val_cases = [all_files[i] for i in val_idx]
+
+    print(f"🚀 路径定位成功: {actual_root}")
+    print(f"🚀 当前运行 Fold {fold_idx} | 训练集: {len(train_cases)} | 验证集: {len(val_cases)}")
+
+    # 返回真实的根目录和划分的文件名列表
+    return actual_root, train_cases, val_cases
 
 
 # ==========================================
