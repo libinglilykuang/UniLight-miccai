@@ -7,7 +7,6 @@ from torch.utils.data import Dataset
 from sklearn.model_selection import KFold
 from tqdm import tqdm
 
-from train import DATA_DIR
 from utils.loss_metrics import BoundaryLoss
 
 
@@ -64,13 +63,15 @@ def find_nii_adaptive(case_dir, mode):
     return candidates[0]
 
 
-def precompute_sdfs_for_dataset(case_list, out_dir, roi_size=(128, 128, 128)):
+def precompute_sdfs_for_dataset(data_dir, case_list, out_dir, roi_size=(128, 128, 128)):
     os.makedirs(out_dir, exist_ok=True)
     print(f"正在为 MSD 数据集预计算 SDFs 到 {out_dir}...")
 
     td, th, tw = roi_size
 
     for name in tqdm(case_list, desc="SDF Precomputing"):
+        if name.startswith("._") or name.startswith("."):
+            continue
         # 1. 文件名处理：MSD 是文件名列表，不再是 BraTS 的文件夹路径
         base_name = name.replace('.nii.gz', '').replace('.nii', '')
         out_path = os.path.join(out_dir, base_name + '.npz')
@@ -85,7 +86,7 @@ def precompute_sdfs_for_dataset(case_list, out_dir, roi_size=(128, 128, 128)):
                 os.remove(out_path)
 
         # 2. 修改点：MSD 标签存储在固定的 labelsTr 目录下
-        seg_path = os.path.join(DATA_DIR, "labelsTr", name)
+        seg_path = os.path.join(data_dir, "labelsTr", name)
         if not os.path.exists(seg_path):
             continue
 
@@ -158,7 +159,7 @@ def get_5fold_split(data_dir, fold_idx, num_folds=5, seed=42):
     # 2. 读取文件名并过滤隐藏文件 (你的过滤逻辑)
     all_files = sorted([
         f for f in os.listdir(images_dir)
-        if (f.endswith('.nii.gz') or f.endswith('.nii')) and not f.startswith('.')
+        if (f.endswith('.nii.gz') or f.endswith('.nii')) and not f.startswith('.') and not f.startswith('._')
     ])
 
     if len(all_files) == 0:
