@@ -30,7 +30,7 @@ SEED = 42
 
 # 路径配置
 if DATASET_TYPE == "brats2023":
-    DATA_DIR = "/kaggle/input/bratsglioma/Training"
+    DATA_DIR = "/kaggle/input/datasets/ahmedelzayat77/bratsglioma/Training"
     TEACHER_WEIGHTS = "/kaggle/input/models/xiaoyouyou198/teacher2/pytorch/default/1/best_teacher_2023.pth"
     RESUME_LAST_PATH = None
     RESUME_BEST_PATH = None
