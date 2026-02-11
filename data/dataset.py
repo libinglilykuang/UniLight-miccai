@@ -166,18 +166,17 @@ def get_5fold_split(data_dir, fold_idx, num_folds=5, seed=42):
     if not os.path.exists(images_dir):
         raise FileNotFoundError(f"无法在 {data_dir} 下找到 imagesTr 文件夹。")
 
-        # ================= 修改开始 =================
-        # 强制过滤掉以 ._ 开头的文件，以及以 . 开头的隐藏文件
-        raw_files = os.listdir(images_dir)
-        all_files = sorted([
-            f for f in raw_files
-            if (f.endswith('.nii.gz') or f.endswith('.nii'))
-               and not f.startswith('.')  # 过滤 .DS_Store 等
-               and not f.startswith('._')  # 核心修复：显式过滤 ._BRATS_xxx 文件
-        ])
+    # 读取文件名并过滤隐藏文件
+    raw_files = os.listdir(images_dir)
+    all_files = sorted([
+        f for f in raw_files
+        if (f.endswith('.nii.gz') or f.endswith('.nii'))
+            and not f.startswith('.')
+            and not f.startswith('._')  # 显式过滤 macOS 垃圾文件
+    ])
 
-        # 打印一下调试信息，让你放心
-        print(f"🔍 在 imagesTr 中找到 {len(all_files)} 个有效文件 (已过滤 {len(raw_files) - len(all_files)} 个垃圾文件)")
+    print(f"🔍 [Split] 在 imagesTr 中找到 {len(all_files)} 个有效文件 (已过滤 {len(raw_files) - len(all_files)} 个垃圾文件)")
+        # ========================================================
         # ================= 修改结束 =================
     if len(all_files) == 0:
         raise ValueError(f"在 {images_dir} 中没有找到有效的 .nii.gz 文件。")
