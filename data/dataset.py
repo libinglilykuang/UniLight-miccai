@@ -144,10 +144,7 @@ def precompute_sdfs_for_dataset(data_dir, case_list, out_dir, roi_size=(128, 128
     print("MSD SDF 预计算/检查完成。")
 
 
-def get_5fold_split(data_dir, fold_idx, num_folds=5, seed=42):
-    """
-    自适应搜索路径并进行五折划分
-    """
+"""def get_5fold_split(data_dir, fold_idx, num_folds=5, seed=42):
     # 1. 递归搜索 imagesTr 文件夹 (你的 glob 逻辑)
     search_path = os.path.join(data_dir, "**/imagesTr")
     found_dirs = glob.glob(search_path, recursive=True)
@@ -193,6 +190,88 @@ def get_5fold_split(data_dir, fold_idx, num_folds=5, seed=42):
     print(f"🚀 当前运行 Fold {fold_idx} | 训练集: {len(train_cases)} | 验证集: {len(val_cases)}")
 
     # 返回真实的根目录和划分的文件名列表
+    return actual_root, train_cases, val_cases"""
+
+
+def get_5fold_split(data_dir, fold_idx, num_folds=5, seed=42):
+    """
+    自适应搜索路径并进行五折划分
+    兼容模式：
+    1. MSD 格式：寻找 imagesTr 文件夹，返回文件名列表。
+    2. BraTS 格式：如果找不到 imagesTr，则将 data_dir 下的子文件夹视为病例。
+    """
+
+    # ================= 1. 尝试搜索 MSD 结构的 imagesTr =================
+    # 使用 recursive=True 搜索所有子目录
+    search_path = os.path.join(data_dir, "**/imagesTr")
+    found_dirs = glob.glob(search_path, recursive=True)
+
+    # 初始化变量
+    case_list = []
+    actual_root = data_dir
+    mode = "Unknown"
+
+    # --- 分支 A: 检测到 imagesTr (MSD/nnU-Net 模式) ---
+    if found_dirs:
+        mode = "MSD"
+        images_dir = found_dirs[0]  # 使用找到的第一个 imagesTr
+        actual_root = os.path.dirname(images_dir)  # 设置根目录为 imagesTr 的上一级
+
+        print(f"📂 [Auto-Detect] 检测到 MSD 结构: {images_dir}")
+
+        # 读取文件名并过滤隐藏文件
+        if os.path.exists(images_dir):
+            raw_files = os.listdir(images_dir)
+            case_list = sorted([
+                f for f in raw_files
+                if (f.endswith('.nii.gz') or f.endswith('.nii'))
+                   and not f.startswith('.')
+                   and not f.startswith('._')
+            ])
+
+    # --- 分支 B: 未找到 imagesTr (BraTS 2023 嵌套模式) ---
+    else:
+        mode = "BraTS"
+        actual_root = data_dir  # 根目录就是传入的目录
+        print(f"📂 [Auto-Detect] 未找到 imagesTr，切换为 BraTS 嵌套目录模式: {actual_root}")
+
+        if os.path.exists(actual_root):
+            # 直接扫描该目录下的所有子文件夹作为病例名
+            raw_items = os.listdir(actual_root)
+            case_list = sorted([
+                d for d in raw_items
+                if os.path.isdir(os.path.join(actual_root, d))  # 必须是文件夹
+                   and not d.startswith('.')  # 过滤隐藏文件夹
+            ])
+
+    # ================= 2. 校验与报错 =================
+    print(f"🔍 [Split] 模式: {mode} | 根目录: {actual_root} | 找到病例: {len(case_list)}")
+
+    if len(case_list) == 0:
+        raise ValueError(
+            f"❌ 严重错误: 在路径 {data_dir} 下未找到任何有效数据。\n"
+            f"1. 如果是 MSD 格式，请确保包含 'imagesTr' 文件夹且内部有 .nii.gz 文件。\n"
+            f"2. 如果是 BraTS 格式，请确保该路径下直接包含病例文件夹。"
+        )
+
+    # ================= 3. KFold 划分 =================
+    kf = KFold(n_splits=num_folds, shuffle=True, random_state=seed)
+
+    # 转换为 numpy array 方便索引，或者直接 list indexing
+    # 这里保持 list 操作，兼容性好
+    folds = list(kf.split(case_list))
+
+    if fold_idx >= num_folds:
+        raise ValueError(f"Fold index {fold_idx} 超出范围 (总共 {num_folds} folds)")
+
+    train_idx, val_idx = folds[fold_idx]
+
+    train_cases = [case_list[i] for i in train_idx]
+    val_cases = [case_list[i] for i in val_idx]
+
+    print(f"🚀 当前运行 Fold {fold_idx}/{num_folds} | 训练集: {len(train_cases)} | 验证集: {len(val_cases)}")
+
+    # 返回真实的根目录 (actual_root) 和 病例列表 (文件名或文件夹名)
     return actual_root, train_cases, val_cases
 
 
