@@ -90,6 +90,16 @@ def precompute_sdfs_for_dataset(data_dir, case_list, out_dir, roi_size=(128, 128
         if not os.path.exists(seg_path):
             continue
 
+        try:
+            # 尝试加载标签
+            seg_obj = nib.load(seg_path)
+            # 这一步是为了触发读取，如果是坏文件会在此时报错
+            seg = seg_obj.get_fdata().astype(np.int16)
+        except Exception as e:
+            # 捕获所有读取错误（包括 ImageFileError），打印警告并跳过，程序不崩溃
+            print(f"⚠️ 跳过损坏或无效文件: {name} | 错误: {e}")
+            continue
+
         seg_obj = nib.load(seg_path)
         seg = seg_obj.get_fdata().astype(np.int16)  # MSD 原始维度通常是 (H, W, D)
 
@@ -156,12 +166,19 @@ def get_5fold_split(data_dir, fold_idx, num_folds=5, seed=42):
     if not os.path.exists(images_dir):
         raise FileNotFoundError(f"无法在 {data_dir} 下找到 imagesTr 文件夹。")
 
-    # 2. 读取文件名并过滤隐藏文件 (你的过滤逻辑)
-    all_files = sorted([
-        f for f in os.listdir(images_dir)
-        if (f.endswith('.nii.gz') or f.endswith('.nii')) and not f.startswith('.') and not f.startswith('._')
-    ])
+        # ================= 修改开始 =================
+        # 强制过滤掉以 ._ 开头的文件，以及以 . 开头的隐藏文件
+        raw_files = os.listdir(images_dir)
+        all_files = sorted([
+            f for f in raw_files
+            if (f.endswith('.nii.gz') or f.endswith('.nii'))
+               and not f.startswith('.')  # 过滤 .DS_Store 等
+               and not f.startswith('._')  # 核心修复：显式过滤 ._BRATS_xxx 文件
+        ])
 
+        # 打印一下调试信息，让你放心
+        print(f"🔍 在 imagesTr 中找到 {len(all_files)} 个有效文件 (已过滤 {len(raw_files) - len(all_files)} 个垃圾文件)")
+        # ================= 修改结束 =================
     if len(all_files) == 0:
         raise ValueError(f"在 {images_dir} 中没有找到有效的 .nii.gz 文件。")
 
