@@ -35,7 +35,7 @@ if DATASET_TYPE == "brats2023":
     RESUME_BEST_PATH = None
 else:
     DATA_DIR = "/kaggle/input/msd-brain-tumour/Task01_BrainTumour"
-    TEACHER_WEIGHTS = "/kaggle/input/teacher5/pytorch/default/1/best_teacher_msd.pth"
+    TEACHER_WEIGHTS = "/kaggle/input/models/xiaoyouyou198/teacher5/pytorch/default/1/best_teacher_msd.pth"
     RESUME_LAST_PATH = None
     RESUME_BEST_PATH = None
 
