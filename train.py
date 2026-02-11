@@ -326,7 +326,7 @@ def main():
 
                 L_boundary = torch.tensor(0.0, device=device)
                 if USE_BOUNDARY:
-                    L_boundary = boundary_loss_fn(logits_main, labels, precomputed_sdfs=sdfs)
+                    L_boundary = boundary_loss_fn(logits_main,  precomputed_sdfs=sdfs)
 
                 loss_main = ALPHA_TASK * L_task + \
                             BETA_DWKD * L_dwkdl + \
@@ -355,7 +355,7 @@ def main():
 
                 L_boundary = torch.tensor(0.0, device=device)
                 if USE_BOUNDARY:
-                    L_boundary = boundary_loss_fn(student_outputs, labels, precomputed_sdfs=sdfs)
+                    L_boundary = boundary_loss_fn(student_outputs, precomputed_sdfs=sdfs)
 
                 loss = ALPHA_TASK * L_task + \
                        BETA_DWKD * L_dwkdl + \
