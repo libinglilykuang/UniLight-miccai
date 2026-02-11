@@ -181,15 +181,23 @@ def measure_efficiency(model, name, roi_size=(128, 128, 128)):
 # ============================================================
 def main():
     # --- 数据划分与加载 ---
-    train_cases, val_cases = get_5fold_split(DATA_DIR, CURRENT_FOLD, dataset_type=DATASET_TYPE)
-    precompute_sdfs_for_dataset(DATA_DIR, train_cases + val_cases, SDF_DIR, ROI_SIZE)
+    # 修正：接收 3 个返回值，移除不支持的 dataset_type 参数
+    actual_root, train_cases, val_cases = get_5fold_split(DATA_DIR, CURRENT_FOLD)
+
+    # 使用 actual_root 确保路径正确
+    precompute_sdfs_for_dataset(actual_root, train_cases + val_cases, SDF_DIR, ROI_SIZE)
 
     if DATASET_TYPE == "brats2023":
-        train_ds = BraTS2023Dataset(train_cases, SDF_DIR, ROI_SIZE, augment=True)
-        val_ds = BraTS2023Dataset(val_cases, SDF_DIR, ROI_SIZE, augment=False)
+        # BraTS Dataset 需要完整路径，我们手动拼接
+        train_full_paths = [os.path.join(actual_root, f) for f in train_cases]
+        val_full_paths = [os.path.join(actual_root, f) for f in val_cases]
+
+        train_ds = BraTS2023Dataset(train_full_paths, SDF_DIR, ROI_SIZE, augment=True)
+        val_ds = BraTS2023Dataset(val_full_paths, SDF_DIR, ROI_SIZE, augment=False)
     else:
-        train_ds = MSDBTSDataset(DATA_DIR, train_cases, SDF_DIR, ROI_SIZE, augment=True)
-        val_ds = MSDBTSDataset(DATA_DIR, val_cases, SDF_DIR, ROI_SIZE, augment=False)
+        # MSD Dataset 内部会自动拼接，但我们需要传入正确的 actual_root
+        train_ds = MSDBTSDataset(actual_root, train_cases, SDF_DIR, ROI_SIZE, augment=True)
+        val_ds = MSDBTSDataset(actual_root, val_cases, SDF_DIR, ROI_SIZE, augment=False)
 
     train_loader = torch.utils.data.DataLoader(train_ds, batch_size=BATCH_SIZE, shuffle=True, num_workers=2)
     val_loader = torch.utils.data.DataLoader(val_ds, batch_size=1, shuffle=False)
