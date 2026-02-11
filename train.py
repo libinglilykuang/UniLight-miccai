@@ -22,7 +22,7 @@ from utils.loss_metrics import (
 # ============================================================
 # 1. 核心配置 (根据你的脚本整合)
 # ============================================================
-DATASET_TYPE = "brats2023"  # 👈 切换此处: "brats2023" 或 "msd"
+DATASET_TYPE = "msd"  # 👈 切换此处: "brats2023" 或 "msd"
 CURRENT_FOLD = 4
 NUM_FOLDS = 5
 SEED = 42
@@ -31,13 +31,13 @@ SEED = 42
 if DATASET_TYPE == "brats2023":
     DATA_DIR = "/kaggle/input/bratsglioma/Training"
     TEACHER_WEIGHTS = "/kaggle/input/teacher4/pytorch/default/1/best_teacher_2023.pth"
-    RESUME_LAST_PATH = "/kaggle/input/last-student4-2/pytorch/default/1/last_student_2023.pth"
-    RESUME_BEST_PATH = "/kaggle/input/best-student4-2/pytorch/default/1/best_student_2023.pt"
+    RESUME_LAST_PATH = None
+    RESUME_BEST_PATH = None
 else:
     DATA_DIR = "/kaggle/input/msd-brain-tumour/Task01_BrainTumour"
     TEACHER_WEIGHTS = "/kaggle/input/teacher5/pytorch/default/1/best_teacher_msd.pth"
-    RESUME_LAST_PATH = "/kaggle/input/last-student-4-2/pytorch/default/1/last_student.pth"
-    RESUME_BEST_PATH = "/kaggle/input/best-student-4-2/pytorch/default/1/best_student (1).pt"
+    RESUME_LAST_PATH = None
+    RESUME_BEST_PATH = None
 
 SAVE_DIR = f"./kd_results_{DATASET_TYPE}_fold_{CURRENT_FOLD}"
 SDF_DIR = os.path.join(SAVE_DIR, "sdfs")
