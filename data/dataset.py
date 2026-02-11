@@ -276,7 +276,7 @@ class BraTS2023Dataset(Dataset):
         if self.augment:
             image, seg_3ch, sdf = self._augment_3d(image, seg_3ch, sdf)
 
-        ret = [torch.FloatTensor(image), torch.FloatTensor(seg_3ch), torch.FloatTensor(sdf)]
+        ret = [torch.FloatTensor(image.copy()),torch.FloatTensor(seg_3ch.copy()),torch.FloatTensor(sdf.copy())]
         if self.return_case_name: ret.append(case_name)
         return tuple(ret)
 
@@ -377,7 +377,7 @@ class MSDBTSDataset(Dataset):
         if self.augment:
             image, seg_3ch, sdf = self._augment_3d(image, seg_3ch, sdf)
 
-        ret = [torch.FloatTensor(image), torch.FloatTensor(seg_3ch), torch.FloatTensor(sdf)]
+        ret = [torch.FloatTensor(image.copy()),torch.FloatTensor(seg_3ch.copy()),torch.FloatTensor(sdf.copy())]
         if self.return_case_name: ret.append(case_name)
         return tuple(ret)
 
