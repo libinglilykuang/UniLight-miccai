@@ -6,7 +6,7 @@ import numpy as np
 from tqdm import tqdm
 import random
 import time
-from monai.networks.nets import UNet
+from models.teacher import get_teacher_model, load_teacher_weights
 
 from models.student import LATUPStudent
 from data.dataset import get_datasets
@@ -213,7 +213,7 @@ def main():
     val_loader = torch.utils.data.DataLoader(val_ds, batch_size=1, shuffle=False, num_workers=2, pin_memory=True)
 
     # --- Model Initialization ---
-    teacher_model = UNet(
+    """teacher_model = UNet(
         spatial_dims=3, in_channels=4, out_channels=3,
         channels=(32, 64, 128, 256, 512), strides=(2, 2, 2, 2), num_res_units=2
     ).to(device)
@@ -226,7 +226,9 @@ def main():
     except Exception as e:
         print(f"Teacher model failed to load: {e}")
 
-    teacher_model.eval()
+    teacher_model.eval()"""
+    teacher_model = get_teacher_model(device)
+    teacher_model = load_teacher_weights(teacher_model, TEACHER_WEIGHTS, device)
 
     student_model = LATUPStudent(in_channels=4, out_channels=3, base_filters=16, deep_supervision=True).to(device)
     optimizer = torch.optim.AdamW(student_model.parameters(), lr=LR, weight_decay=1e-5)
