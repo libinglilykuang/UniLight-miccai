@@ -64,14 +64,16 @@ class BoundaryLoss(nn.Module):
         maxv = np.max(np.abs(sdf)) if np.max(np.abs(sdf)) > 0 else 1.0
         return sdf / (maxv + 1e-8)
 
-    def forward(self, logits, precomputed_sdfs):
-        """
-        logits: Student predictions
-        precomputed_sdfs: SDF maps loaded from dataset
-        """
+    def forward(self, logits, targets, precomputed_sdfs=None):
         probs = torch.sigmoid(logits)
-        # Boundary loss is the product of probabilities and SDF values
-        return (probs * precomputed_sdfs).mean()
+
+        if precomputed_sdfs is not None:
+            # Boundary Loss = Mean( Prob * SDF )
+            val = (probs * precomputed_sdfs).mean()
+            return val
+
+        # 兜底：如果没有 SDF，返回 0
+        return torch.tensor(0.0, device=logits.device)
 
 
 # ============================================================
