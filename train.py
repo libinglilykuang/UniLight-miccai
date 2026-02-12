@@ -398,16 +398,17 @@ def main():
 
     print(f"\nTraining Complete! Best Dice: {best_dice:.4f}")
 
+    dummy_shape = (1, 4, *ROI_SIZE)
     print("\n===== Comprehensive Efficiency Benchmark =====")
 
     # Benchmark Teacher
-    res_t = benchmark_model(teacher_model, "Teacher (UNet)", ROI_SIZE, device)
+    res_t = benchmark_model(teacher_model, "Teacher (UNet)", dummy_shape, device)
 
     # Benchmark Student
     # Note: DS is disabled here to measure actual inference latency in production
     student_model_eval = LATUPStudent(in_channels=4, out_channels=3, base_filters=16, deep_supervision=False).to(device)
     student_model_eval.load_state_dict(student_model.state_dict(), strict=False)
-    res_s = benchmark_model(student_model_eval, "Student (LATUP)", ROI_SIZE, device)
+    res_s = benchmark_model(student_model_eval, "Student (LATUP)", dummy_shape, device)
 
     # Print final comparison table
     print_table([res_t, res_s])
