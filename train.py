@@ -23,7 +23,7 @@ from utils.loss_metrics import (
 # ============================================================
 # 1. 核心配置
 # ============================================================
-DATASET_TYPE = "msd"  # 👈 切换 "brats2023" 或 "msd"
+DATASET_TYPE = "brats2023"  # 👈 切换 "brats2023" 或 "msd"
 CURRENT_FOLD = 4
 NUM_FOLDS = 5
 SEED = 42
