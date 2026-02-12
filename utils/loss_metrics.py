@@ -72,7 +72,6 @@ class BoundaryLoss(nn.Module):
             val = (probs * precomputed_sdfs).mean()
             return val
 
-        # 兜底：如果没有 SDF，返回 0
         return torch.tensor(0.0, device=logits.device)
 
 

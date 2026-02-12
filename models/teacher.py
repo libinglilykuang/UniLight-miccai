@@ -8,7 +8,6 @@ from monai.networks.nets import UNet
 def get_teacher_model(device):
     """
     Initialize the Teacher Model (Standard 3D U-Net).
-    Based on the configuration used by Deni for BraTS/MSD tasks.
     """
     model = UNet(
         spatial_dims=3,
@@ -23,10 +22,6 @@ def get_teacher_model(device):
 
 
 def load_teacher_weights(model, weight_path, device):
-    """
-    Robust weight loading for the teacher model.
-    Supports different saving formats (state_dict or full checkpoint).
-    """
     if not os.path.exists(weight_path):
         print(f"Teacher weights not found at {weight_path}")
         return model
@@ -44,7 +39,7 @@ def load_teacher_weights(model, weight_path, device):
     else:
         model.load_state_dict(checkpoint)
 
-    model.eval()  # Teacher must always be in eval mode
+    model.eval()
     # Freeze teacher parameters to save memory and prevent accidental gradients
     for param in model.parameters():
         param.requires_grad = False

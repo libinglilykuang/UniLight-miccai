@@ -11,9 +11,7 @@ import subprocess
 import sys
 from monai.networks.nets import UNet
 
-# 从你的模块中导入
 from models.student import LATUPStudent
-# ✅ 修改点1: 导入工厂函数 get_datasets
 from data.dataset import get_datasets
 from utils.loss_metrics import (
     WeightedDiceBCELoss, DWKDLoss, BoundaryLoss,
@@ -149,17 +147,14 @@ def measure_efficiency(model, name, roi_size=(128, 128, 128)):
     times.sort()
     avg_ms = sum(times) / len(times)
 
-    print(f"\n[EFF] {name} | Params: {params / 1e6:.2f} M | FLOPs: {flops_g if flops_g else 'N/A'} G")
-    print(f"[EFF] {name} | Latency: {avg_ms:.2f} ms")
+    print(f"\n{name} | Params: {params / 1e6:.2f} M | FLOPs: {flops_g if flops_g else 'N/A'} G")
+    print(f" {name} | Latency: {avg_ms:.2f} ms")
 
 
 # ============================================================
 # 4. 主训练流程
 # ============================================================
 def main():
-    # --- ✅ 修改点2: 使用 get_datasets 一键加载数据 ---
-    print(f"🔄 正在加载数据集 (Mode: {DATASET_TYPE})...")
-
     train_ds, val_ds = get_datasets(
         data_dir=DATA_DIR,
         fold=CURRENT_FOLD,

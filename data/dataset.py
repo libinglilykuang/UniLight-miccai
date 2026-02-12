@@ -315,7 +315,6 @@ class MSDBTSDataset(Dataset):
         sd, sh, sw = (d - td) // 2, (h - th) // 2, (w - tw) // 2
         return data[:, sd:sd + td, sh:sh + th, sw:sw + tw]
 
-    # ⚠️ 补充缺失的 Augmentation 方法
     def _augment_3d(self, image, seg, sdf=None):
         if np.random.rand() < 0.5:
             image, seg = image[:, ::-1, :, :], seg[:, ::-1, :, :]
@@ -348,7 +347,6 @@ class MSDBTSDataset(Dataset):
             # 0,1,2,3 -> 3,2,0,1
             image = np.transpose(img_data, (3, 2, 0, 1))
         else:
-            # 兼容可能的单通道或异常数据
             raise ValueError(f"Unexpected shape for MSD: {img_data.shape}")
 
         # Seg
@@ -403,12 +401,10 @@ def get_datasets(data_dir, fold, num_folds=5, seed=42, sdf_dir=None, roi_size=(1
 
     # 3. 实例化 Dataset
     if mode == "MSD":
-        print("🏭 [Factory] 创建 MSDBTSDataset...")
         train_ds = MSDBTSDataset(root, train_list, sdf_dir=sdf_dir, roi_size=roi_size, augment=True, return_case_name=True)
         val_ds = MSDBTSDataset(root, val_list, sdf_dir=sdf_dir, roi_size=roi_size, augment=False, return_case_name=True)
 
     elif mode == "BraTS":
-        print("🏭 [Factory] 创建 BraTS2023Dataset...")
         train_ds = BraTS2023Dataset(train_list, sdf_dir=sdf_dir, roi_size=roi_size, augment=True, return_case_name=True)
         val_ds = BraTS2023Dataset(val_list, sdf_dir=sdf_dir, roi_size=roi_size, augment=False, return_case_name=True)
 
