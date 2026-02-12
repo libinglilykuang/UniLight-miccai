@@ -404,13 +404,13 @@ def get_datasets(data_dir, fold, num_folds=5, seed=42, sdf_dir=None, roi_size=(1
     # 3. 实例化 Dataset
     if mode == "MSD":
         print("🏭 [Factory] 创建 MSDBTSDataset...")
-        train_ds = MSDBTSDataset(root, train_list, sdf_dir=sdf_dir, roi_size=roi_size, augment=True)
-        val_ds = MSDBTSDataset(root, val_list, sdf_dir=sdf_dir, roi_size=roi_size, augment=False)
+        train_ds = MSDBTSDataset(root, train_list, sdf_dir=sdf_dir, roi_size=roi_size, augment=True, return_case_name=True)
+        val_ds = MSDBTSDataset(root, val_list, sdf_dir=sdf_dir, roi_size=roi_size, augment=False, return_case_name=True)
 
     elif mode == "BraTS":
         print("🏭 [Factory] 创建 BraTS2023Dataset...")
-        train_ds = BraTS2023Dataset(train_list, sdf_dir=sdf_dir, roi_size=roi_size, augment=True)
-        val_ds = BraTS2023Dataset(val_list, sdf_dir=sdf_dir, roi_size=roi_size, augment=False)
+        train_ds = BraTS2023Dataset(train_list, sdf_dir=sdf_dir, roi_size=roi_size, augment=True, return_case_name=True)
+        val_ds = BraTS2023Dataset(val_list, sdf_dir=sdf_dir, roi_size=roi_size, augment=False, return_case_name=True)
 
     else:
         raise ValueError(f"Unknown mode: {mode}")
