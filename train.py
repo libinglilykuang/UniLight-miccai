@@ -1,4 +1,3 @@
-
 import os
 import torch
 import torch.nn as nn
@@ -7,8 +6,6 @@ import numpy as np
 from tqdm import tqdm
 import random
 import time
-import subprocess
-import sys
 from monai.networks.nets import UNet
 
 from models.student import LATUPStudent
@@ -19,14 +16,14 @@ from utils.loss_metrics import (
 )
 
 # ============================================================
-# 1. 核心配置
+# 1. Core Configuration
 # ============================================================
-DATASET_TYPE = "brats2023"  # 👈 切换 "brats2023" 或 "msd"
-CURRENT_FOLD = 4
+DATASET_TYPE = "msd"  # Choose "brats2023" or "msd"
+CURRENT_FOLD = 4  # from [0,4]
 NUM_FOLDS = 5
 SEED = 42
 
-# 路径配置
+# Path Configurations
 if DATASET_TYPE == "brats2023":
     DATA_DIR = "/kaggle/input/datasets/ahmedelzayat77/bratsglioma/Training"
     TEACHER_WEIGHTS = "/kaggle/input/models/xiaoyouyou198/teacher2/pytorch/default/1/best_teacher_2023.pth"
@@ -52,7 +49,7 @@ ROI_SIZE = (128, 128, 128)
 VAL_INTERVAL = 5
 TEMPERATURE = 3.0
 
-# 损失权重
+# Loss Weights
 ALPHA_TASK = 0.6
 BETA_DWKD = 0.2
 USE_RCE = True
@@ -63,7 +60,7 @@ BOUNDARY_WEIGHT = 0.1
 
 
 # ============================================================
-# 2. 随机性与环境初始化
+# 2. Randomness and Environment Initialization
 # ============================================================
 def set_seed(seed=42):
     random.seed(seed)
@@ -79,80 +76,127 @@ set_seed(SEED)
 
 
 # ============================================================
-# 3. 效率评测函数
+# 3. Efficiency Benchmarking Functions
 # ============================================================
-def try_import_thop():
+def benchmark_model(model, model_name, input_size=(1, 4, 128, 128, 128), device='cuda'):
     try:
         from thop import profile
-        return profile
-    except Exception:
-        try:
-            subprocess.check_call([sys.executable, "-m", "pip", "install", "-q", "thop"])
-            from thop import profile
-            return profile
-        except Exception as e:
-            return None
+    except ImportError:
+        profile = None
 
-
-def measure_efficiency(model, name, roi_size=(128, 128, 128)):
-    params = sum(p.numel() for p in model.parameters())
-    flops_g = None
-    profile = try_import_thop()
-
-    # 简单的探针模型构建，用于计算 FLOPs
-    if profile is not None:
-        try:
-            # 临时构建对应的 CPU 模型以避免显存问题
-            if name.lower().startswith("teach"):
-                probe = UNet(spatial_dims=3, in_channels=4, out_channels=3,
-                             channels=(32, 64, 128, 256, 512), strides=(2, 2, 2, 2), num_res_units=2).cpu().eval()
-            else:
-                probe = LATUPStudent(in_channels=4, out_channels=3, base_filters=16,
-                                     deep_supervision=False).cpu().eval()
-
-            dummy_cpu = torch.randn(1, 4, *roi_size)
-            flops, _ = profile(probe, inputs=(dummy_cpu,), verbose=False)
-            flops_g = flops / 1e9
-        except Exception as e:
-            print(f"[EFF] {name} FLOPs error: {e}")
-
-    model_device = next(model.parameters()).device
-    dummy = torch.randn(1, 4, *roi_size).to(model_device)
+    device = torch.device(device)
+    model.to(device)
     model.eval()
 
-    # 预热
-    with torch.no_grad():
-        for _ in range(5): _ = model(dummy)
+    # Create dummy input
+    dummy_input = torch.randn(input_size).to(device)
 
-    # 测速
-    times = []
-    runs = 20
-    with torch.no_grad():
-        if model_device.type == "cuda":
-            start_event = torch.cuda.Event(enable_timing=True)
-            end_event = torch.cuda.Event(enable_timing=True)
-            for _ in range(runs):
-                start_event.record()
-                _ = model(dummy)
-                end_event.record()
-                torch.cuda.synchronize()
-                times.append(start_event.elapsed_time(end_event))
+    # --- 1. Params & MACs ---
+    params_m, macs_g, tflops = 0, 0, 0
+    if profile is not None:
+        try:
+            # Wrapper to handle models that return tuples
+            class Wrapper(nn.Module):
+                def __init__(self, m): super().__init__(); self.m = m
+
+                def forward(self, x):
+                    out = self.m(x)
+                    return out[0] if isinstance(out, (list, tuple)) else out
+
+            macs, params = profile(Wrapper(model), inputs=(dummy_input,), verbose=False)
+            params_m = params / 1e6
+            macs_g = macs / 1e9
+            # TFLOPS = 2 * MACs / 10^12 (Assuming multiply-accumulate is 2 operations)
+            tflops = (2 * macs) / 1e12
+        except Exception as e:
+            print(f"thop calculation failed: {e}")
+
+    # --- 2. Latency ---
+    # Warm-up
+    for _ in range(10):
+        with torch.no_grad(): _ = model(dummy_input)
+
+    if device.type == 'cuda':
+        torch.cuda.synchronize()
+        start_event = torch.cuda.Event(enable_timing=True)
+        end_event = torch.cuda.Event(enable_timing=True)
+
+        start_event.record()
+        for _ in range(100):  # Average over 100 runs
+            with torch.no_grad():
+                _ = model(dummy_input)
+        end_event.record()
+        torch.cuda.synchronize()
+        latency_ms = start_event.elapsed_time(end_event) / 100
+    else:
+        # CPU Fallback timing
+        t0 = time.time()
+        for _ in range(50):
+            with torch.no_grad(): _ = model(dummy_input)
+        latency_ms = (time.time() - t0) * 1000 / 50
+
+    # --- 3. Inference Memory ---
+    im_mb = 0
+    if device.type == 'cuda':
+        torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats()
+        with torch.no_grad():
+            _ = model(dummy_input)
+        im_mb = torch.cuda.max_memory_allocated() / (1024 ** 2)
+
+    # --- 4. Training Memory (Simulating backward pass) ---
+    tm_mb = 0
+    if device.type == 'cuda':
+        torch.cuda.empty_cache()
+        torch.cuda.reset_peak_memory_stats()
+        model.train()  # Switch back to training mode
+
+        # Check if the model has trainable parameters
+        if any(p.requires_grad for p in model.parameters()):
+            opt = torch.optim.Adam(model.parameters())
+            opt.zero_grad()
+            out = model(dummy_input)
+            loss = (out[0].mean() if isinstance(out, (list, tuple)) else out.mean())
+            loss.backward()
+            tm_mb = torch.cuda.max_memory_allocated() / (1024 ** 2)
         else:
-            for _ in range(runs):
-                t0 = time.time()
-                _ = model(dummy)
-                t1 = time.time()
-                times.append((t1 - t0) * 1000.0)
+            tm_mb = 0  # Frozen models have no training overhead
 
-    times.sort()
-    avg_ms = sum(times) / len(times)
+    model.eval()
 
-    print(f"\n{name} | Params: {params / 1e6:.2f} M | FLOPs: {flops_g if flops_g else 'N/A'} G")
-    print(f" {name} | Latency: {avg_ms:.2f} ms")
+    return {
+        "Model": model_name,
+        "Params (M)": f"{params_m:.2f}",
+        "MACs (G)": f"{macs_g:.2f}",
+        "TFLOPS": f"{tflops:.4f}",
+        "Latency (ms)": f"{latency_ms:.2f}",
+        "Inference Mem (MB)": f"{im_mb:.0f}",
+        "Training Mem (MB)": f"{tm_mb:.0f}"
+    }
+
+
+def print_table(results):
+    """Prints a clean ASCII table for benchmark comparison"""
+    if not results: return
+    headers = list(results[0].keys())
+    # Calculate column widths
+    widths = [max(len(h), max(len(str(r[h])) for r in results)) + 2 for h in headers]
+
+    border = "+" + "+".join(["-" * w for w in widths]) + "+"
+
+    print("\n" + border)
+    header_row = "|" + "|".join([f" {h:<{w - 2}} " for h, w in zip(headers, widths)]) + "|"
+    print(header_row)
+    print(border)
+
+    for res in results:
+        row = "|" + "|".join([f" {str(res[h]):<{w - 2}} " for h, w in zip(headers, widths)]) + "|"
+        print(row)
+    print(border + "\n")
 
 
 # ============================================================
-# 4. 主训练流程
+# 4. Main Training Pipeline
 # ============================================================
 def main():
     train_ds, val_ds = get_datasets(
@@ -168,8 +212,7 @@ def main():
                                                pin_memory=True)
     val_loader = torch.utils.data.DataLoader(val_ds, batch_size=1, shuffle=False, num_workers=2, pin_memory=True)
 
-    # --- 模型初始化 ---
-    print("🛠️ 初始化模型...")
+    # --- Model Initialization ---
     teacher_model = UNet(
         spatial_dims=3, in_channels=4, out_channels=3,
         channels=(32, 64, 128, 256, 512), strides=(2, 2, 2, 2), num_res_units=2
@@ -179,49 +222,48 @@ def main():
         teacher_ckpt = torch.load(TEACHER_WEIGHTS, map_location='cpu')
         sd = teacher_ckpt['model_state_dict'] if 'model_state_dict' in teacher_ckpt else teacher_ckpt
         teacher_model.load_state_dict(sd, strict=False)
-        print("✅ 老师模型加载成功")
+        print("Teacher model loaded successfully")
     except Exception as e:
-        print(f"❌ 老师模型加载失败: {e}")
+        print(f"Teacher model failed to load: {e}")
 
     teacher_model.eval()
 
     student_model = LATUPStudent(in_channels=4, out_channels=3, base_filters=16, deep_supervision=True).to(device)
     optimizer = torch.optim.AdamW(student_model.parameters(), lr=LR, weight_decay=1e-5)
 
-    # --- 损失函数 ---
+    # --- Loss Functions ---
     task_loss_fn = WeightedDiceBCELoss(weights=[1.0, 1.0, 3.0])
     dwkd_loss_fn = DWKDLoss(temperature=TEMPERATURE, use_rce=USE_RCE, rce_t=RCE_T)
     boundary_loss_fn = BoundaryLoss()
 
-    # --- 智能续训逻辑 ---
+    # --- Resume Training Logic ---
     start_epoch = 1
     best_dice = 0.0
 
-    # 1. 加载 Last (恢复状态)
+    # 1. Resume from Last Checkpoint
     if RESUME_LAST_PATH and os.path.exists(RESUME_LAST_PATH):
-        print(f"🔄 Resume Last: {RESUME_LAST_PATH}")
         ckpt = torch.load(RESUME_LAST_PATH, map_location=device)
         student_model.load_state_dict(ckpt['model_state_dict'])
         optimizer.load_state_dict(ckpt['optimizer_state_dict'])
         start_epoch = ckpt['epoch'] + 1
         best_dice = ckpt.get('best_dice', 0.0)
 
-    # 2. 检查 Best (校准分数)
+    # 2. Check Best Checkpoint
     if RESUME_BEST_PATH and os.path.exists(RESUME_BEST_PATH):
         ckpt_best = torch.load(RESUME_BEST_PATH, map_location='cpu')
         actual_best = ckpt_best.get('best_dice', 0.0)
         if actual_best > best_dice:
             best_dice = actual_best
-            print(f"✅ 校准 Best Dice 为: {best_dice:.4f}")
+            print(f"Calibrated Best Dice to: {best_dice:.4f}")
 
-            # 如果没加载 Last，就从 Best 开始
+            # If Last was not loaded, start fine-tuning from Best
             if not (RESUME_LAST_PATH and os.path.exists(RESUME_LAST_PATH)):
-                print("⚠️ 无 Last 权重，从 Best 权重开始微调...")
+                print("No Last weight found, starting from Best weight...")
                 student_model.load_state_dict(ckpt_best['model_state_dict'])
 
-    print(f"🚀 开始训练: Epoch {start_epoch} - {TOTAL_EPOCHS}, Best Dice: {best_dice:.4f}")
+    print(f"Starting training: Epoch {start_epoch} - {TOTAL_EPOCHS}, Best Dice: {best_dice:.4f}")
 
-    # --- 训练循环 ---
+    # --- Training Loop ---
     for epoch in range(start_epoch, TOTAL_EPOCHS + 1):
         student_model.train()
         epoch_loss = 0.0
@@ -240,19 +282,18 @@ def main():
 
             student_outputs = student_model(images)
 
-            # Deep Supervision 处理
+            # Deep Supervision
             if isinstance(student_outputs, (list, tuple)):
                 logits_main = student_outputs[0]
                 logits_d2 = student_outputs[1]
                 logits_d3 = student_outputs[2]
 
-                # Main Loss
+                # Main Task Loss
                 L_task = task_loss_fn(logits_main, labels)
                 L_dwkdl, L_rce = dwkd_loss_fn(logits_main, teacher_outputs)
 
                 L_boundary = torch.tensor(0.0, device=device)
                 if USE_BOUNDARY:
-                    # ✅ 修改点3: 修复 BoundaryLoss 调用，补充 labels 参数
                     L_boundary = boundary_loss_fn(logits_main, labels, precomputed_sdfs=sdfs)
 
                 loss_main = ALPHA_TASK * L_task + \
@@ -260,7 +301,7 @@ def main():
                             (GAMMA_RCE * L_rce if USE_RCE else 0.0) + \
                             (BOUNDARY_WEIGHT * L_boundary if USE_BOUNDARY else 0.0)
 
-                # Aux Loss
+                # Auxiliary Losses for DS
                 labels_d2 = F.interpolate(labels, scale_factor=0.5, mode='nearest')
                 loss_d2 = ALPHA_TASK * task_loss_fn(logits_d2, labels_d2)
 
@@ -272,7 +313,7 @@ def main():
                 probs = torch.sigmoid(logits_main)
 
             else:
-                # No DS
+                # No Deep Supervision
                 L_task = task_loss_fn(student_outputs, labels)
                 L_dwkdl, L_rce = dwkd_loss_fn(student_outputs, teacher_outputs)
 
@@ -300,7 +341,7 @@ def main():
         epoch_loss /= max(len(train_loader), 1)
         mean_train_dice = float(np.mean([np.mean(d) for d in train_dices])) if train_dices else 0.0
 
-        # --- 验证 ---
+        # --- Validation ---
         if epoch % VAL_INTERVAL == 0 or epoch == 1:
             student_model.eval()
             val_dices, val_hd95s = [], []
@@ -311,7 +352,7 @@ def main():
 
                     outputs = student_model(images)
 
-                    # ✅ 修改点4: 验证时处理 Deep Supervision 输出 (Tuple -> Tensor)
+                    # Extract main branch for validation if using Deep Supervision
                     if isinstance(outputs, (list, tuple)):
                         outputs = outputs[0]
 
@@ -321,7 +362,7 @@ def main():
                     val_dices.append(calculate_dice(preds, labels))
                     val_hd95s.append(calculate_hd95_per_channel(preds, labels))
 
-            # 指标计算
+            # Metric Calculations
             val_dices_array = np.array(val_dices) if len(val_dices) > 0 else np.zeros((1, 3))
             mean_val_dice = float(np.mean(val_dices_array))
 
@@ -334,7 +375,7 @@ def main():
                 f'  Val Dice={mean_val_dice:.4f} (WT={val_dices_array[:, 0].mean():.4f}, TC={val_dices_array[:, 1].mean():.4f}, ET={val_dices_array[:, 2].mean():.4f})')
             print(f'  Val HD95={mean_val_hd95:.2f}')
 
-            # 保存 Best
+            # Save Best Model
             if mean_val_dice > best_dice:
                 best_dice = mean_val_dice
                 torch.save({
@@ -343,11 +384,11 @@ def main():
                     'optimizer_state_dict': optimizer.state_dict(),
                     'best_dice': best_dice,
                 }, BEST_PATH)
-                print(f'  ✅ Saving Best Model: {best_dice:.4f}')
+                print(f'Saving Best Model: {best_dice:.4f}')
             else:
-                print(f'  (Best was {best_dice:.4f})')
+                print(f'(Best was {best_dice:.4f})')
 
-        # 保存 Last
+        # Save Last Checkpoint
         torch.save({
             'epoch': epoch,
             'model_state_dict': student_model.state_dict(),
@@ -355,11 +396,21 @@ def main():
             'best_dice': best_dice,
         }, LAST_PATH)
 
-    print(f"\n训练完成! Best Dice: {best_dice:.4f}")
+    print(f"\nTraining Complete! Best Dice: {best_dice:.4f}")
 
-    print("\n===== 最终效率评估 =====")
-    measure_efficiency(teacher_model, "Teacher")
-    measure_efficiency(student_model, "Student")
+    print("\n===== Comprehensive Efficiency Benchmark =====")
+
+    # Benchmark Teacher
+    res_t = benchmark_model(teacher_model, "Teacher (UNet)", ROI_SIZE, device)
+
+    # Benchmark Student
+    # Note: DS is disabled here to measure actual inference latency in production
+    student_model_eval = LATUPStudent(in_channels=4, out_channels=3, base_filters=16, deep_supervision=False).to(device)
+    student_model_eval.load_state_dict(student_model.state_dict(), strict=False)
+    res_s = benchmark_model(student_model_eval, "Student (LATUP)", ROI_SIZE, device)
+
+    # Print final comparison table
+    print_table([res_t, res_s])
 
 
 if __name__ == "__main__":

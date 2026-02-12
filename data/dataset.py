@@ -1,4 +1,3 @@
-
 import os
 import glob
 import numpy as np
@@ -10,16 +9,9 @@ from tqdm import tqdm
 from utils.loss_metrics import BoundaryLoss
 
 
-# ==========================================
-# 1. 核心工具：智能划分与文件查找
-# ==========================================
-
+# KFold Splitting
 def get_5fold_split(data_dir, fold_idx, num_folds=5, seed=42):
-    """
-    自适应搜索路径并进行五折划分
-    返回: (root_dir, train_list, val_list, mode)
-    """
-    # 搜索 imagesTr (MSD特征)
+    # Search for imagesTr (Characteristic of MSD dataset)
     search_path = os.path.join(data_dir, "**/imagesTr")
     found_dirs = glob.glob(search_path, recursive=True)
 
@@ -27,43 +19,41 @@ def get_5fold_split(data_dir, fold_idx, num_folds=5, seed=42):
     actual_root = data_dir
     mode = "Unknown"
 
-    # --- 模式 A: MSD (扁平结构) ---
+    # --- Mode A: MSD ---
     if found_dirs:
         mode = "MSD"
         images_dir = found_dirs[0]
-        actual_root = os.path.dirname(images_dir)  # MSD 根目录
-        print(f"📂 [Detect] 模式: MSD (Found imagesTr at {images_dir})")
+        actual_root = os.path.dirname(images_dir)  # MSD Root Directory
 
         if os.path.exists(images_dir):
             raw_files = os.listdir(images_dir)
-            # MSD 列表存储文件名
+            # MSD stores the filenames in the case list
             case_list = sorted([
                 f for f in raw_files
                 if (f.endswith('.nii.gz') or f.endswith('.nii')) and not f.startswith('.')
             ])
 
-    # --- 模式 B: BraTS 2023 (嵌套结构) ---
+    # --- Mode B: BraTS 2023 ---
     else:
         mode = "BraTS"
         actual_root = data_dir
-        print(f"📂 [Detect] 模式: BraTS (Nested folders in {actual_root})")
 
         if os.path.exists(actual_root):
             raw_items = os.listdir(actual_root)
-            # BraTS 列表存储完整路径
+            # BraTS stores the full folder paths in the case list
             case_list = sorted([
                 os.path.join(actual_root, d)
                 for d in raw_items
                 if os.path.isdir(os.path.join(actual_root, d)) and not d.startswith('.')
             ])
 
-    # --- 校验 ---
+    # --- Validation ---
     if not case_list:
-        raise FileNotFoundError(f"❌ 严重错误: 在 {data_dir} 下未找到有效数据 (BraTS/MSD 均未匹配)")
+        raise FileNotFoundError(f"No valid data found in {data_dir} (Neither BraTS nor MSD matched)")
 
-    print(f"📊 总病例数: {len(case_list)} | Mode: {mode}")
+    print(f"Total Cases: {len(case_list)} | Mode: {mode}")
 
-    # --- KFold ---
+    # --- KFold Splitting ---
     kf = KFold(n_splits=num_folds, shuffle=True, random_state=seed)
     folds = list(kf.split(case_list))
 
@@ -74,12 +64,12 @@ def get_5fold_split(data_dir, fold_idx, num_folds=5, seed=42):
     train_cases = [case_list[i] for i in train_idx]
     val_cases = [case_list[i] for i in val_idx]
 
-    # ⭐ 返回 mode 以便工厂函数使用
+    # Return mode for the factory function to use
     return actual_root, train_cases, val_cases, mode
 
 
 def find_nii_adaptive(case_dir, mode):
-    """BraTS 专用：递归查找特定模态文件"""
+    # BraTS2023 Specific: Recursively find specific modality files.
     all_files = []
     for root, _, files in os.walk(case_dir):
         for f in files:
@@ -99,6 +89,7 @@ def find_nii_adaptive(case_dir, mode):
     candidates = []
     for f_path in all_files:
         f_name = os.path.basename(f_path).lower()
+        # Exclusion logic to prevent mismatching T1/T1c and T2/Flair
         if mode == 't1' and any(x in f_name for x in ['t1c', 't1ce', 't1gd']): continue
         if mode == 't2' and any(x in f_name for x in ['flair', 't2f']): continue
 
@@ -106,6 +97,8 @@ def find_nii_adaptive(case_dir, mode):
             candidates.append(f_path)
 
     if not candidates: return None
+
+    # Priority matching for specific naming conventions
     primary = {'flair': '-t2f', 't1': '-t1n', 't1ce': '-t1c', 't2': '-t2w', 'seg': '-seg'}
     for c in candidates:
         if primary[mode] in os.path.basename(c).lower(): return c
@@ -113,47 +106,44 @@ def find_nii_adaptive(case_dir, mode):
 
 
 def precompute_sdfs_unified(data_dir, case_list, out_dir, mode, roi_size=(128, 128, 128)):
-    """
-    统一的 SDF 预计算函数，支持 MSD 和 BraTS 两种模式
-    """
+    # Unified Signed Distance Function (SDF) precomputation supporting both MSD and BraTS modes.
     os.makedirs(out_dir, exist_ok=True)
     td, th, tw = roi_size
-    print(f"🛠️ 正在预计算 SDFs (Mode: {mode}, Count: {len(case_list)})...")
 
     for case_item in tqdm(case_list, desc="SDF Precomputing"):
-        # 1. 确定 Seg 路径和 Case Name
+        # 1. Determine Segmentation Path and Case Name
         if mode == "MSD":
-            # MSD: case_item 是文件名
+            # MSD: case_item is the filename
             case_name = case_item.replace('.nii.gz', '').replace('.nii', '')
             seg_path = os.path.join(data_dir, "labelsTr", case_item)
             if not os.path.exists(seg_path):
-                seg_path = os.path.join(data_dir, "labels", case_item)  # 兼容
+                seg_path = os.path.join(data_dir, "labels", case_item)  # Compatibility check
         else:
-            # BraTS: case_item 是文件夹路径
+            # BraTS: case_item is the folder path
             case_name = os.path.basename(case_item.rstrip('/'))
             seg_path = find_nii_adaptive(case_item, 'seg')
 
         out_path = os.path.join(out_dir, case_name + '.npz')
 
-        # 2. 检查缓存
+        # 2. Check Cache
         if os.path.exists(out_path):
             try:
                 with np.load(out_path) as d:
                     _ = d['sdfs']
                 continue
             except:
-                os.remove(out_path)  # 坏文件重做
+                os.remove(out_path)  # Redo corrupted files
 
         if not seg_path or not os.path.exists(seg_path):
             continue
 
-        # 3. 读取 Seg 并统一处理
+        # 3. Read Segmentation and process
         try:
             seg = nib.load(seg_path).get_fdata().astype(np.int16)
         except Exception:
             continue
 
-        # 标签映射逻辑
+        # Label Mapping Logic
         if mode == "MSD":
             # MSD: 1:ED, 2:NCR, 3:ET -> WT(1+2+3), TC(2+3), ET(3)
             wt = ((seg == 1) | (seg == 2) | (seg == 3)).astype(np.uint8)
@@ -165,13 +155,11 @@ def precompute_sdfs_unified(data_dir, case_list, out_dir, mode, roi_size=(128, 1
             tc = ((seg == 1) | (seg == 3)).astype(np.uint8)
             et = (seg == 3).astype(np.uint8)
 
-        # 统一转置为 (3, D, H, W)
-        # 注意：BraTS原始通常是 (H,W,D)，需要 transpose(2,0,1) 或根据实际情况
-        # 这里统一转成 (Channel, D, H, W)
+        # Unified Transpose to (Channel, D, H, W)
         seg_3ch = np.stack([wt, tc, et], axis=0)  # (3, H, W, D)
         seg_3ch = np.transpose(seg_3ch, (0, 3, 1, 2))
 
-        # Pad & Crop
+        # Pad & Crop to ROI size
         _, d, h, w = seg_3ch.shape
         pd, ph, pw = max(0, td - d), max(0, th - h), max(0, tw - w)
         if pd or ph or pw:
@@ -181,7 +169,7 @@ def precompute_sdfs_unified(data_dir, case_list, out_dir, mode, roi_size=(128, 1
         sd, sh, sw = (d - td) // 2, (h - th) // 2, (w - tw) // 2
         seg_roi = seg_3ch[:, sd:sd + td, sh:sh + th, sw:sw + tw]
 
-        # Compute SDF (float16)
+        # Compute SDF (stored as float16 to save space)
         sdfs = np.zeros_like(seg_roi, dtype=np.float16)
         for ci in range(3):
             sdfs[ci] = BoundaryLoss.compute_sdf_np(seg_roi[ci]).astype(np.float16)
@@ -189,10 +177,8 @@ def precompute_sdfs_unified(data_dir, case_list, out_dir, mode, roi_size=(128, 1
         np.savez_compressed(out_path, sdfs=sdfs)
 
 
-# ==========================================
-# 2. BraTS 2023 Dataset Class
-# ==========================================
 
+# BraTS 2023 Dataset
 class BraTS2023Dataset(Dataset):
     def __init__(self, case_dirs, sdf_dir=None, roi_size=(128, 128, 128), augment=False, return_case_name=False):
         self.case_dirs = case_dirs
@@ -233,7 +219,7 @@ class BraTS2023Dataset(Dataset):
             image = np.rot90(image, k=k, axes=(2, 3))
             seg = np.rot90(seg, k=k, axes=(2, 3))
             if sdf is not None: sdf = np.rot90(sdf, k=k, axes=(2, 3))
-        # Intensity noise
+        # Add intensity noise
         image += np.random.normal(0, 0.05, size=image.shape).astype(np.float32)
         return np.ascontiguousarray(image), np.ascontiguousarray(seg), sdf
 
@@ -241,29 +227,32 @@ class BraTS2023Dataset(Dataset):
         case_dir = self.case_dirs[idx]
         case_name = os.path.basename(case_dir.rstrip('/'))
 
-        # Load 4 modalities
+        # Load 4 modalities (FLAIR, T1, T1CE, T2)
         modalities = []
         for mod in ['flair', 't1', 't1ce', 't2']:
             f = find_nii_adaptive(case_dir, mod)
             if not f: raise FileNotFoundError(f"Missing {mod} in {case_dir}")
             img = nib.load(f).get_fdata().astype(np.float32)
             modalities.append(self._zscore_nonzero(img))
+
         # Stack & Transpose: (4, H, W, D) -> (4, D, H, W)
         image = np.stack(modalities, axis=0)
         image = np.transpose(image, (0, 3, 1, 2))
 
-        # Seg
+        # Process Segmentation
         seg_file = find_nii_adaptive(case_dir, 'seg')
         seg = nib.load(seg_file).get_fdata().astype(np.int16)
         wt = ((seg == 1) | (seg == 2) | (seg == 3)).astype(np.float32)
         tc = ((seg == 1) | (seg == 3)).astype(np.float32)
         et = (seg == 3).astype(np.float32)
+
         # (3, H, W, D) -> (3, D, H, W)
         seg_3ch = np.stack([wt, tc, et], axis=0)
         seg_3ch = np.transpose(seg_3ch, (0, 3, 1, 2))
 
         image, seg_3ch = self._pad_crop(image), self._pad_crop(seg_3ch)
 
+        # Load SDF if available
         sdf = np.zeros_like(seg_3ch)
         if self.sdf_dir:
             sdf_path = os.path.join(self.sdf_dir, f"{case_name}.npz")
@@ -276,15 +265,12 @@ class BraTS2023Dataset(Dataset):
         if self.augment:
             image, seg_3ch, sdf = self._augment_3d(image, seg_3ch, sdf)
 
-        ret = [torch.FloatTensor(image.copy()),torch.FloatTensor(seg_3ch.copy()),torch.FloatTensor(sdf.copy())]
+        ret = [torch.FloatTensor(image.copy()), torch.FloatTensor(seg_3ch.copy()), torch.FloatTensor(sdf.copy())]
         if self.return_case_name: ret.append(case_name)
         return tuple(ret)
 
 
-# ==========================================
-# 3. MSD Dataset Class
-# ==========================================
-
+# MSD Dataset
 class MSDBTSDataset(Dataset):
     def __init__(self, data_dir, case_names, sdf_dir=None, roi_size=(128, 128, 128), augment=False,
                  return_case_name=False):
@@ -339,17 +325,16 @@ class MSDBTSDataset(Dataset):
         except Exception:
             raise FileNotFoundError(f"Read error: {img_path}")
 
-        # MSD处理: (H,W,D,4) -> (4,D,H,W)
+        # MSD Handling: (H,W,D,4) -> (4,D,H,W)
         if img_data.ndim == 4 and img_data.shape[-1] == 4:
             for c in range(4):
                 img_data[..., c] = self._zscore_nonzero(img_data[..., c])
-            # (H,W,D,C) -> (C,D,H,W)
-            # 0,1,2,3 -> 3,2,0,1
+            # (H,W,D,C) -> (C,D,H,W) mapping to 3,2,0,1
             image = np.transpose(img_data, (3, 2, 0, 1))
         else:
-            raise ValueError(f"Unexpected shape for MSD: {img_data.shape}")
+            raise ValueError(f"Unexpected shape for MSD input: {img_data.shape}")
 
-        # Seg
+        # Process Segmentation
         seg_path = os.path.join(self.data_dir, "labelsTr", name)
         if not os.path.exists(seg_path): seg_path = os.path.join(self.data_dir, "labels", name)
         seg = nib.load(seg_path).get_fdata().astype(np.int16)
@@ -375,33 +360,25 @@ class MSDBTSDataset(Dataset):
         if self.augment:
             image, seg_3ch, sdf = self._augment_3d(image, seg_3ch, sdf)
 
-        ret = [torch.FloatTensor(image.copy()),torch.FloatTensor(seg_3ch.copy()),torch.FloatTensor(sdf.copy())]
+        ret = [torch.FloatTensor(image.copy()), torch.FloatTensor(seg_3ch.copy()), torch.FloatTensor(sdf.copy())]
         if self.return_case_name: ret.append(case_name)
         return tuple(ret)
 
 
-# ==========================================
-# 4. 工厂入口：自动选择 Dataset
-# ==========================================
-
+# Auto-selection of Dataset
 def get_datasets(data_dir, fold, num_folds=5, seed=42, sdf_dir=None, roi_size=(128, 128, 128)):
-    """
-    统一入口：
-    1. 自动检测目录结构 (MSD vs BraTS)
-    2. 自动预计算 SDF
-    3. 自动实例化对应的 Dataset 类
-    """
-    # 1. 获取划分和模式
+    # 1. Get split and detect mode
     root, train_list, val_list, mode = get_5fold_split(data_dir, fold, num_folds, seed)
 
-    # 2. 预计算 SDF
+    # 2. Precompute SDF if a directory is provided
     if sdf_dir:
         all_cases = train_list + val_list
         precompute_sdfs_unified(root, all_cases, sdf_dir, mode, roi_size)
 
-    # 3. 实例化 Dataset
+    # 3. Instantiate specific Dataset class
     if mode == "MSD":
-        train_ds = MSDBTSDataset(root, train_list, sdf_dir=sdf_dir, roi_size=roi_size, augment=True, return_case_name=True)
+        train_ds = MSDBTSDataset(root, train_list, sdf_dir=sdf_dir, roi_size=roi_size, augment=True,
+                                 return_case_name=True)
         val_ds = MSDBTSDataset(root, val_list, sdf_dir=sdf_dir, roi_size=roi_size, augment=False, return_case_name=True)
 
     elif mode == "BraTS":

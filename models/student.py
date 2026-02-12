@@ -44,10 +44,6 @@ class ParallelConvBlock(nn.Module):
 
 
 class ConvBlock(nn.Module):
-    """
-    Standard double-layer 3D convolutional block.
-    """
-
     def __init__(self, in_channels, out_channels):
         super().__init__()
         self.conv = nn.Sequential(
@@ -65,7 +61,7 @@ class ConvBlock(nn.Module):
 
 class LATUPStudent(nn.Module):
     """
-    Lightweight Student Model Architecture (4-layer structure, supports Deep Supervision).
+    Lightweight Student Model Architecture.
     """
 
     def __init__(self, in_channels=4, out_channels=3, base_filters=16, deep_supervision=True):

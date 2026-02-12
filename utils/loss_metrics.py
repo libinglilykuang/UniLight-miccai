@@ -51,7 +51,7 @@ class BoundaryLoss(nn.Module):
 
     @staticmethod
     def compute_sdf_np(gt_binary):
-        """Compute SDF map from binary ground truth using SciPy."""
+        """Compute SDF map from binary ground truth"""
         if gt_binary.sum() == 0:
             return np.ones_like(gt_binary, dtype=np.float32)
         posmask = gt_binary.astype(bool)
@@ -176,10 +176,6 @@ def hd95_binary(pred_bin, gt_bin, spacing=(1.0, 1.0, 1.0)):
 
 
 def calculate_hd95_per_channel(preds, targets, roi_size=(128, 128, 128), spacing=(1.0, 1.0, 1.0)):
-    """
-    Calculate 95th percentile Hausdorff Distance per channel.
-    Handles 'inf' results by applying a penalty based on the ROI diagonal.
-    """
     # Convert tensors to numpy and threshold at 0.5
     preds_np = (preds.detach().cpu().numpy() > 0.5).astype(np.uint8)
     targets_np = (targets.detach().cpu().numpy() > 0.5).astype(np.uint8)
