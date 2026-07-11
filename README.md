@@ -1,93 +1,203 @@
 # Uni-Light
 
+Official PyTorch implementation of **Uni-Light**, an ultra-lightweight knowledge distillation framework for 3D brain tumour segmentation.
 
+The training pipeline consists of two stages:
 
-## Getting started
+1. Train a **MONAI Unet teacher model**.
+2. Distil the knowledge from the trained teacher model into the lightweight **Uni-Light student model**.
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+The dataset is divided into fixed training, validation, and testing subsets using a 5-fold cross validation.
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+## Project Structure
 
-## Add your files
-
-* [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-* [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
-
+```text
+UniLight/
+├── data/                  # Dataset loading and preprocessing
+├── models/                # Teacher and student model definitions
+├── utils/                 # Loss functions, metrics, and utilities
+├── train_teacher.py       # Unet teacher training
+├── train.py               # Uni-Light student distillation
+└── README.md
 ```
-cd existing_repo
-git remote add origin https://projects.cs.nott.ac.uk/ssylk2/uni-light.git
-git branch -M main
-git push -uf origin main
+
+## Requirements
+
+The project requires Python, PyTorch, CUDA, and MONAI.
+
+The code has been tested with the following environment:
+
+```text
+Python 3.10
+PyTorch 2.5.1
+CUDA 12.1
+MONAI
 ```
 
-## Integrate with your tools
-
-* [Set up project integrations](https://projects.cs.nott.ac.uk/ssylk2/uni-light/-/settings/integrations)
-
-## Collaborate with your team
-
-* [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-* [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-* [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-* [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-* [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
-
-## Test and Deploy
-
-Use the built-in continuous integration in GitLab.
-
-* [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-* [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-* [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-* [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-* [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
-
-***
-
-# Editing this README
-
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
-
-## Suggestions for a good README
-
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
-
-## Name
-Choose a self-explaining name for your project.
-
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
-
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
-
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+A CUDA-compatible NVIDIA GPU is recommended for training.
 
 ## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+Clone the repository:
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
+```bash
+git clone https://github.com/libinglilykuang/UniLight.git
+cd UniLight
+```
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+Create and activate a Conda environment:
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+```bash
+conda create -n unilight python=3.10 -y
+conda activate unilight
+```
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+Install PyTorch and the required Python packages:
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+```bash
+pip install torch torchvision torchaudio
+pip install monai nibabel numpy scipy scikit-learn tqdm tensorboard
+```
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+You can also check the GPU status with:
 
-## License
-For open source projects, say how it is licensed.
+```bash
+nvidia-smi
+```
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+## Dataset
+
+## Datasets
+
+This project supports two brain tumour segmentation datasets.
+
+### 1. BraTS Glioma Dataset
+
+The main dataset used for training the SAXNet teacher model and the Uni-Light student model is available from Kaggle:
+
+[Download the BraTS Glioma Dataset from Kaggle](https://www.kaggle.com/datasets/ahmedelzayat77/bratsglioma)
+
+After downloading and extracting the dataset, the expected directory is:
+
+```text
+bratsglioma/
+└── Training/
+    ├── BraTS-GLI-00000-000/
+    │   ├── BraTS-GLI-00000-000-t1n.nii.gz
+    │   ├── BraTS-GLI-00000-000-t1c.nii.gz
+    │   ├── BraTS-GLI-00000-000-t2w.nii.gz
+    │   ├── BraTS-GLI-00000-000-t2f.nii.gz
+    │   └── BraTS-GLI-00000-000-seg.nii.gz
+    ├── BraTS-GLI-00001-000/
+    └── ...
+```
+
+Set the dataset path used by the training scripts to the `Training` directory.
+
+Example local path:
+
+```python
+data_dir = "/path/to/bratsglioma/Training"
+```
+
+Example Kaggle Notebook path:
+
+```python
+data_dir = "/kaggle/input/datasets/ahmedelzayat77/bratsglioma/Training"
+```
+
+---
+
+### 2. MSD Brain Tumour Dataset
+
+The Medical Segmentation Decathlon brain tumour dataset is also supported and can be downloaded from Kaggle:
+
+[Download the MSD Brain Tumour Dataset from Kaggle](https://www.kaggle.com/datasets/trangnguyen25/msd-brain-tumour)
+
+After extracting the dataset, the expected structure is:
+
+```text
+Task01_BrainTumour/
+├── imagesTr/
+├── labelsTr/
+├── imagesTs/
+└── dataset.json
+```
+
+Example path:
+
+```python
+data_dir = "/path/to/Task01_BrainTumour"
+```
+
+The MSD dataset may require a dataset loader or preprocessing configuration different from the BraTS Glioma dataset because its files are organized into separate image and label directories.
+
+
+
+## Stage 1: Train the UNet Teacher Model
+
+Before training the student model, first train the UNet teacher model using `train_teacher.py`.
+
+Check and update the following settings in `train_teacher.py`:
+
+Run the teacher training script:
+
+```bash
+python -u train_teacher.py
+```
+
+The best teacher checkpoint should be used for student knowledge distillation.
+
+## Resume Teacher Training
+
+When a previous teacher checkpoint is available, configure the checkpoint path in `train_teacher.py`.
+
+For example:
+
+```python
+resume_path = "teacher_results/last_teacher.pth"
+```
+
+Then run the same training command:
+
+```bash
+CUDA_VISIBLE_DEVICES=1 python -u train_teacher.py
+```
+
+The script should restore the model state, optimizer state, current epoch, and best validation score from the checkpoint.
+
+## Stage 2: Train the Uni-Light Student Model
+
+After teacher training is complete, configure the teacher checkpoint path in `train.py`.
+
+For example:
+
+```python
+teacher_checkpoint = "teacher_results/best_teacher.pth"
+```
+
+The teacher model should be loaded and frozen during student training.
+
+Run student knowledge distillation:
+
+```bash
+python -u train.py
+```
+
+During student training:
+
+1. The trained UNet teacher model is loaded.
+2. The teacher parameters are frozen.
+3. The teacher generates predictions or intermediate representations.
+4. The Uni-Light student is optimized using the segmentation loss and knowledge distillation losses.
+5. The checkpoint with the best validation performance is saved.
+
+## Resume Student Training
+
+To resume interrupted student training, configure the student checkpoint path in `train.py`.
+
+For example:
+
+```python
+resume_path = "student_results/last_student.pth"
+```
