@@ -1,0 +1,32 @@
+
+# Model checkpoints
+checkpoints/
+*.pth
+
+# Python cache
+__pycache__/
+*.py[cod]
+
+# Model checkpoints
+checkpoints/
+*.pth
+*.pt
+*.ckpt
+
+# Local datasets
+data/brats2023/
+data/msd/
+data/*.zip
+*.nii
+*.nii.gz
+
+# Training outputs
+kd_results_brats2023_fold_4/
+monai_student_epoch1_test_v1/
+saxnet_distill_results_70_10_20_v1/
+saxnet_student_epoch1_test_v1/
+
+# Logs and experiment files
+*.log
+wandb/
+runs/

@@ -21,7 +21,7 @@ SEED = 42
 
 # Path Configuration
 if DATASET_TYPE == "brats2023":
-    DATA_DIR = "/kaggle/input/datasets/ahmedelzayat77/bratsglioma/Training"
+    DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "brats2023", "Training")
 else:
     DATA_DIR = "/kaggle/input/msd-brain-tumour/Task01_BrainTumour"
 

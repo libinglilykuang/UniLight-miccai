@@ -25,13 +25,28 @@ SEED = 42
 
 # Path Configurations
 if DATASET_TYPE == "brats2023":
-    DATA_DIR = "/kaggle/input/datasets/ahmedelzayat77/bratsglioma/Training"
-    TEACHER_WEIGHTS = "/kaggle/input/models/xiaoyouyou198/teacher2/pytorch/default/1/best_teacher_2023.pth"
+    DATA_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "data", "brats2023", "Training")
+    TEACHER_WEIGHTS = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "checkpoints",
+        "BraTS2023",
+        "best_teacher_2023.pth"
+    )
     RESUME_LAST_PATH = None
     RESUME_BEST_PATH = None
 else:
-    DATA_DIR = "/kaggle/input/msd-brain-tumour/Task01_BrainTumour"
-    TEACHER_WEIGHTS = "/kaggle/input/models/xiaoyouyou198/teacher5/pytorch/default/1/best_teacher_msd.pth"
+    DATA_DIR = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "data",
+        "msd",
+        "Task01_BrainTumour"
+    )
+    TEACHER_WEIGHTS = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        "checkpoints",
+        "MSD-BTS",
+        "best_teacher_msd.pth"
+    )
     RESUME_LAST_PATH = None
     RESUME_BEST_PATH = None
 
