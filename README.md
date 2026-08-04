@@ -17,6 +17,42 @@ The training pipeline consists of two stages:
 
 The experiments are conducted on the BraTS2023-GLI and MSD-BTS datasets using five-fold cross-validation.
 
+## Framework Overview
+
+Uni-Light is an ultra-lightweight knowledge distillation framework for
+3D brain tumour segmentation. It combines a compact student network,
+dynamic uncertainty-weighted knowledge distillation, task supervision,
+RCE loss, and an SDF-based boundary loss.
+
+<p align="center">
+  <img src="assets/framework.png"
+       alt="Overview of the Uni-Light knowledge distillation framework"
+       width="750">
+</p>
+
+<p align="center">
+  <em>Overview of the Uni-Light framework. A frozen teacher provides
+  uncertainty-aware supervision for the lightweight student model.</em>
+</p>
+
+## Student Architecture
+
+The student adopts a compact 3D encoder-decoder architecture with
+parallel multi-scale convolutions and deep supervision. The Parallel
+Convolution Module (PCM) extracts features using multiple receptive
+fields while maintaining a low parameter count.
+
+<p align="center">
+  <img src="assets/student.png"
+       alt="Uni-Light student architecture and parallel convolution module"
+       width="900">
+</p>
+
+<p align="center">
+  <em>Detailed architecture of the Uni-Light student model and its
+  Parallel Convolution Module.</em>
+</p>
+
 ## Project Structure
 
 ```text
@@ -167,32 +203,6 @@ To resume student training, configure:
 
 ```python
 resume_path = "student_results/last_student.pth"
-```
-
-## Cross-Validation
-
-The experiments reported in the paper use five-fold cross-validation.
-
-The folds should be generated using fixed seeds and must remain identical across all compared methods. Training, validation, and testing cases must not overlap within each fold.
-
-## Evaluation
-
-The main evaluation metrics are:
-
-* Dice Similarity Coefficient;
-* 95% Hausdorff Distance;
-* number of parameters;
-* FLOPs;
-* inference latency;
-* inference memory;
-* training memory.
-
-Add the corresponding evaluation command here when the public evaluation script is available:
-
-```bash
-python evaluate.py \
-    --checkpoint student_results/best_student.pth \
-    --data-dir /path/to/dataset
 ```
 
 ## Citation
