@@ -1,48 +1,54 @@
 # Uni-Light
 
-Official PyTorch implementation of **Uni-Light**, an ultra-lightweight knowledge distillation framework for 3D brain tumour segmentation.
+Official PyTorch implementation of **“Uni-Light: An Ultra-Lightweight Framework via Uncertainty-Aware Knowledge Distillation for Brain Tumour Segmentation”**, accepted at the MICCAI 2026 DEMI Workshop.
+
+Uni-Light is an ultra-lightweight framework for 3D brain tumour segmentation. It combines:
+
+* a compact multi-scale student architecture;
+* Dynamic Weighted Knowledge Distillation (DWKD);
+* deep supervision;
+* Reverse Cross-Entropy (RCE) loss;
+* an SDF-based boundary loss.
 
 The training pipeline consists of two stages:
 
-1. Train a **MONAI Unet teacher model**.
-2. Distil the knowledge from the trained teacher model into the lightweight **Uni-Light student model**.
+1. Train a high-capacity Residual 3D U-Net teacher implemented using MONAI.
+2. Distil knowledge from the trained teacher into the lightweight Uni-Light student model.
 
-The dataset is divided into fixed training, validation, and testing subsets using a 5-fold cross validation.
+The experiments are conducted on the BraTS2023-GLI and MSD-BTS datasets using five-fold cross-validation.
 
 ## Project Structure
 
 ```text
-UniLight/
+UniLight-miccai/
 ├── data/                  # Dataset loading and preprocessing
 ├── models/                # Teacher and student model definitions
 ├── utils/                 # Loss functions, metrics, and utilities
-├── train_teacher.py       # Unet teacher training
+├── train_teacher.py       # Residual 3D U-Net teacher training
 ├── train.py               # Uni-Light student distillation
+├── requirements.txt       # Python dependencies
+├── LICENSE                # Software licence
 └── README.md
 ```
 
 ## Requirements
 
-The project requires Python, PyTorch, CUDA, and MONAI.
+The code has been tested using:
 
-The code has been tested with the following environment:
+* Python 3.10
+* PyTorch 2.5.1
+* CUDA 12.1
+* MONAI
 
-```text
-Python 3.10
-PyTorch 2.5.1
-CUDA 12.1
-MONAI
-```
-
-A CUDA-compatible NVIDIA GPU is recommended for training.
+A CUDA-compatible NVIDIA GPU is recommended.
 
 ## Installation
 
 Clone the repository:
 
 ```bash
-git clone https://github.com/libinglilykuang/UniLight.git
-cd UniLight
+git clone https://github.com/libinglilykuang/UniLight-miccai.git
+cd UniLight-miccai
 ```
 
 Create and activate a Conda environment:
@@ -52,32 +58,26 @@ conda create -n unilight python=3.10 -y
 conda activate unilight
 ```
 
-Install PyTorch and the required Python packages:
+Install the required dependencies:
 
 ```bash
-pip install torch torchvision torchaudio
-pip install monai nibabel numpy scipy scikit-learn tqdm tensorboard
+pip install -r requirements.txt
 ```
-
-You can also check the GPU status with:
-
-```bash
-nvidia-smi
-```
-
-## Dataset
 
 ## Datasets
 
-This project supports two brain tumour segmentation datasets.
+### BraTS2023-GLI
 
-### 1. BraTS Glioma Dataset
+The BraTS2023-GLI dataset contains multi-modal MRI scans and tumour segmentation annotations.
 
-The main dataset used for training the SAXNet teacher model and the Uni-Light student model is available from Kaggle:
+Each case contains four MRI modalities:
 
-[Download the BraTS Glioma Dataset from Kaggle](https://www.kaggle.com/datasets/ahmedelzayat77/bratsglioma)
+* T1
+* T1ce
+* T2
+* FLAIR
 
-After downloading and extracting the dataset, the expected directory is:
+The expected directory structure is:
 
 ```text
 bratsglioma/
@@ -88,33 +88,18 @@ bratsglioma/
     │   ├── BraTS-GLI-00000-000-t2w.nii.gz
     │   ├── BraTS-GLI-00000-000-t2f.nii.gz
     │   └── BraTS-GLI-00000-000-seg.nii.gz
-    ├── BraTS-GLI-00001-000/
     └── ...
 ```
 
-Set the dataset path used by the training scripts to the `Training` directory.
-
-Example local path:
+The dataset path must be configured before training:
 
 ```python
 data_dir = "/path/to/bratsglioma/Training"
 ```
 
-Example Kaggle Notebook path:
+### MSD Brain Tumour Dataset
 
-```python
-data_dir = "/kaggle/input/datasets/ahmedelzayat77/bratsglioma/Training"
-```
-
----
-
-### 2. MSD Brain Tumour Dataset
-
-The Medical Segmentation Decathlon brain tumour dataset is also supported and can be downloaded from Kaggle:
-
-[Download the MSD Brain Tumour Dataset from Kaggle](https://www.kaggle.com/datasets/trangnguyen25/msd-brain-tumour)
-
-After extracting the dataset, the expected structure is:
+The MSD Brain Tumour dataset uses the following structure:
 
 ```text
 Task01_BrainTumour/
@@ -124,59 +109,45 @@ Task01_BrainTumour/
 └── dataset.json
 ```
 
-Example path:
+Configure the dataset path as:
 
 ```python
 data_dir = "/path/to/Task01_BrainTumour"
 ```
 
-The MSD dataset may require a dataset loader or preprocessing configuration different from the BraTS Glioma dataset because its files are organized into separate image and label directories.
+The MSD-BTS preprocessing and loader configuration should be selected before training.
 
+## Stage 1: Train the Teacher Model
 
+The teacher is a high-capacity Residual 3D U-Net implemented using MONAI.
 
-## Stage 1: Train the UNet Teacher Model
-
-Before training the student model, first train the UNet teacher model using `train_teacher.py`.
-
-Check and update the following settings in `train_teacher.py`:
-
-Run the teacher training script:
+Configure the dataset path, output directory, and training parameters in `train_teacher.py`, then run:
 
 ```bash
 python -u train_teacher.py
 ```
 
-The best teacher checkpoint should be used for student knowledge distillation.
+The best teacher checkpoint is saved and subsequently used for student knowledge distillation.
 
-## Resume Teacher Training
-
-When a previous teacher checkpoint is available, configure the checkpoint path in `train_teacher.py`.
-
-For example:
+To resume teacher training, configure the checkpoint path:
 
 ```python
 resume_path = "teacher_results/last_teacher.pth"
 ```
 
-Then run the same training command:
+Then run:
 
 ```bash
-CUDA_VISIBLE_DEVICES=1 python -u train_teacher.py
+python -u train_teacher.py
 ```
 
-The script should restore the model state, optimizer state, current epoch, and best validation score from the checkpoint.
+## Stage 2: Train Uni-Light
 
-## Stage 2: Train the Uni-Light Student Model
-
-After teacher training is complete, configure the teacher checkpoint path in `train.py`.
-
-For example:
+Before training the student, configure the teacher checkpoint in `train.py`:
 
 ```python
 teacher_checkpoint = "teacher_results/best_teacher.pth"
 ```
-
-The teacher model should be loaded and frozen during student training.
 
 Run student knowledge distillation:
 
@@ -184,20 +155,69 @@ Run student knowledge distillation:
 python -u train.py
 ```
 
-During student training:
+During training:
 
-1. The trained UNet teacher model is loaded.
-2. The teacher parameters are frozen.
-3. The teacher generates predictions or intermediate representations.
-4. The Uni-Light student is optimized using the segmentation loss and knowledge distillation losses.
-5. The checkpoint with the best validation performance is saved.
+* the teacher model is loaded and frozen;
+* voxel-wise teacher uncertainty is estimated using prediction entropy;
+* uncertainty-weighted knowledge distillation is applied;
+* the student is optimised using task, DWKD, RCE, and boundary losses;
+* the checkpoint with the best validation performance is saved.
 
-## Resume Student Training
-
-To resume interrupted student training, configure the student checkpoint path in `train.py`.
-
-For example:
+To resume student training, configure:
 
 ```python
 resume_path = "student_results/last_student.pth"
 ```
+
+## Cross-Validation
+
+The experiments reported in the paper use five-fold cross-validation.
+
+The folds should be generated using fixed seeds and must remain identical across all compared methods. Training, validation, and testing cases must not overlap within each fold.
+
+## Evaluation
+
+The main evaluation metrics are:
+
+* Dice Similarity Coefficient;
+* 95% Hausdorff Distance;
+* number of parameters;
+* FLOPs;
+* inference latency;
+* inference memory;
+* training memory.
+
+Add the corresponding evaluation command here when the public evaluation script is available:
+
+```bash
+python evaluate.py \
+    --checkpoint student_results/best_student.pth \
+    --data-dir /path/to/dataset
+```
+
+## Citation
+
+Please cite the following paper when using this repository:
+
+```bibtex
+@inproceedings{kuang2026unilight,
+  title={Uni-Light: An Ultra-Lightweight Framework via Uncertainty-Aware Knowledge Distillation for Brain Tumour Segmentation},
+  author={Kuang, Libing and Salehi, Soren and Wu, Ziling and Tafti, Ahmad P. and Moemeni, Armaghan},
+  booktitle={MICCAI 2026 DEMI Workshop},
+  year={2026}
+}
+```
+
+The official publication DOI and proceedings information will be added after publication.
+
+## Licence
+
+This software is made available under the PolyForm Noncommercial
+License 1.0.0 for non-commercial research and educational purposes.
+
+Commercial use is not permitted without prior written permission.
+Please refer to the `LICENSE` file for the complete terms.
+
+## Contact
+
+For questions regarding the implementation, please open an issue in this repository.
