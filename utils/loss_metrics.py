@@ -101,10 +101,12 @@ class DWKDLoss(nn.Module):
 
         # Dynamic weight calculation (Alpha) based on prediction entropy
         eps = 1e-6
-        h = -(p_t * torch.log(p_s.clamp(eps, 1 - eps)) +
-              (1 - p_t) * torch.log((1 - p_s).clamp(eps, 1 - eps)))
-        h_max = h.amax(dim=(1, 2, 3, 4), keepdim=True).clamp(min=eps)
-        alpha = (h / h_max).detach()
+        with torch.no_grad():
+            p_t_safe = p_t.float().clamp(eps, 1.0 - eps)
+            h = -(p_t_safe * torch.log(p_t_safe) + (1.0 - p_t_safe) * torch.log1p(-p_t_safe))
+
+            # Batch-level normalization (Equation 2)
+            alpha = h / (h.max() + eps)
 
         # DWKD using KL Divergence
         kl_pix = self._kl_bernoulli(p_t, p_s)
